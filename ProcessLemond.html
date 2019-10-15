@@ -1,0 +1,338 @@
+<html>
+
+<head>
+
+    <script src="papaparse.js"></script>
+    <script src="moment.js"></script>
+
+</head>
+
+<body>
+
+
+<input type="file" id="files" name="files[]"/>
+<input type="datetime-local" id="eventDate">
+<input type="text" id="weight">
+<button type="button" id="convert">Convert</button>
+<output id="list"></output>
+
+</body>
+
+</html>
+
+
+<script>
+
+    // Check for the various File API support.
+    if (window.File && window.FileReader && window.FileList && window.Blob) {
+
+    } else {
+        alert('The File APIs are not fully supported in this browser.');
+    }
+
+    document.getElementById('convert').addEventListener('click', handleFileSelect, false);
+
+    function handleFileSelect(evt) {
+        var files = document.getElementById("files").files; // FileList object
+
+        // files is a FileList of File objects. List some properties.
+        Papa.parse(files[0]
+            , {
+                complete: function (results, file) {
+
+
+                    var xmlDoc = document.implementation.createDocument("", "", null);
+                    var tcx = xmlDoc.createElement("TrainingCenterDatabase");
+                    var domparser = new DOMParser();
+
+                    tcx.setAttribute("xsi:schemaLocation", "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd");
+                    tcx.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+                    tcx.setAttribute("xmlns", "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2");
+                    tcx.setAttribute("xmlns:ns2", "http://www.garmin.com/xmlschemas/UserProfile/v2");
+                    tcx.setAttribute("xmlns:ns3", "http://www.garmin.com/xmlschemas/ActivityExtension/v2");
+                    tcx.setAttribute("xmlns:ns4", "http://www.garmin.com/xmlschemas/ProfileExtension/v1");
+                    tcx.setAttribute("xmlns:ns5", "http://www.garmin.com/xmlschemas/ActivityGoals/v1");
+
+
+                    var startDate = moment(document.getElementById("eventDate").value);
+                    var workDate = moment(document.getElementById("eventDate").value);
+                    var weight = document.getElementById("weight").value / 2.205;
+
+                    var xactivities = xmlDoc.createElement("Activities");
+                    var xactivity = xmlDoc.createElement("Activity");
+                    xactivity.setAttribute("Sport", "Biking");
+
+                    var xid = xmlDoc.createElement("Id");
+                    xid.textContent = startDate.format("YYYY-MM-DDTHH:mm:ss.SSS") + "Z";;
+                    xactivity.appendChild(xid);
+
+                    var lapData = {};
+                    lapData["TotalTimeSeconds"] = 0.0;
+                    lapData["DistanceMeters"] = 0.0;
+                    lapData["MaximumSpeed"] = 0.000000;
+                    lapData["Intensity"] = "Active";
+                    lapData["Cadence"] = 0;
+                    lapData["TriggerMethod"] = "Manual"
+                    lapData["Calories"] = 0.00
+
+
+
+                    var lapHeartData = {};
+                    lapHeartData["AverageHeartRateBpm"] = 0;
+                    lapHeartData["MaximumHeartRateBpm"] = 0;
+
+
+                    var LapExtensions = {};
+                    LapExtensions["AvgSpeed"] = 0.0000000;
+                    LapExtensions["AvgWatts"] = 0;
+                    LapExtensions["MaxWatts"] = 0;
+
+
+                    var avgData = {};
+                    avgData["TotalCadence"] = 0;
+                    avgData["CountCadence"] = 0;
+                    avgData["TotalHeartRate"] = 0;
+                    avgData["CountHeartRate"] = 0;
+                    avgData["TotalSpeed"] = 0;
+                    avgData["CountSpeed"] = 0;
+                    avgData["TotalWatts"] = 0;
+                    avgData["CountWatts"] = 0;
+
+
+                    var dataStartRow = 2;
+                    var meterFactor = 1609.344;
+                    var meterPerSecFactor = 3.281;
+
+                    //Create the Track Node
+                    var track = xmlDoc.createElement("Track");
+
+                    for(var result in results.data){
+
+                        var trackPoint = xmlDoc.createElement("Trackpoint");
+
+                        if (result < dataStartRow ||results.data[result].length <=2 ){
+                            continue;
+                        }
+
+                        var tpTime = results.data[result][0].split(":");
+                        var tpSeconds = (parseInt(tpTime[0])*60*60) + (parseInt(tpTime[1])*60) + parseInt(tpTime[2]);
+                        var tpSecondsSinceLast = tpSeconds-lapData["TotalTimeSeconds"];
+                        tpTime = workDate.add({"seconds":tpSecondsSinceLast}).format("YYYY-MM-DDTHH:mm:ss.SSS") + "Z";
+
+                        var tpHeartBPM = parseInt(results.data[result][4]);
+                        var tpDistance = results.data[result][2]*meterFactor;
+                        var tpCadence = parseInt(results.data[result][5]);
+                        var tpSpeed = results.data[result][1]/meterPerSecFactor;
+                        var tpWatts = parseInt(results.data[result][3]);
+                        var tpLevel = parseInt(results.data[result][7]);
+
+
+
+                        //Record AvgData
+                        if(tpHeartBPM > 0) {
+                            avgData["TotalHeartRate"] += tpHeartBPM;
+                            avgData["CountHeartRate"] ++;
+                        }
+
+
+                        avgData["TotalCadence"] += tpCadence;
+                        avgData["CountCadence"] ++;
+
+                        avgData["TotalSpeed"] += tpSpeed;
+                        avgData["CountSpeed"] ++;
+
+                        avgData["TotalWatts"] += tpWatts;
+                        avgData["CountWatts"] ++;
+
+
+
+                        lapHeartData["MaximumHeartRateBpm"] = tpHeartBPM>lapHeartData["MaximumHeartRateBpm"]?tpHeartBPM:lapHeartData["MaximumHeartRateBpm"];
+                        lapData["DistanceMeters"]=tpDistance>lapData["DistanceMeters"]?tpDistance:lapData["DistanceMeters"];
+                        lapData["TotalTimeSeconds"]=tpSeconds>lapData["TotalTimeSeconds"]?tpSeconds:lapData["TotalTimeSeconds"];
+                        lapData["MaximumSpeed"]=tpSpeed>lapData["MaximumSpeed"]?tpSpeed:lapData["MaximumSpeed"];
+                        LapExtensions["MaxWatts"]=tpWatts>LapExtensions["MaxWatts"]?tpWatts:LapExtensions["MaxWatts"];
+
+
+                        //Calculate Calories burned using METS score for the current duration of the log
+                        var metScore = 0;
+                        if(tpWatts <= 50){
+                            metScore = 3.0;
+                        } else if (tpWatts <= 100){
+                            metScore = 5.5;
+                        } else if (tpWatts <= 150){
+                            metScore = 7.0;
+                        } else if (tpWatts <= 200){
+                            metScore = 10.5;
+                        } else if (tpWatts <= 250){
+                            metScore = 12.5;
+                        }
+
+                        lapData["Calories"] += ((.0175*metScore*weight)/60)*tpSecondsSinceLast;
+
+
+                        var tpHR = xmlDoc.createElement("HeartRateBpm");
+                        var tpHRVal = xmlDoc.createElement("Value");
+                        tpHRVal.textContent = tpHeartBPM;
+                        tpHR.appendChild(tpHRVal);
+                        trackPoint.appendChild(tpHR);
+
+                        var tpData = {"Time":tpTime
+                                    ,"DistanceMeters":tpDistance
+                                    ,"AltitudeMeters":tpLevel
+                                    ,"Cadence":tpCadence};
+
+                        var tpExtdata = {"Speed":tpSpeed
+                                        ,"Watts":tpWatts};
+
+
+                        for(var parm in tpData){
+                            var parmElem = xmlDoc.createElement(parm);
+                            parmElem.textContent = tpData[parm];
+                            trackPoint.appendChild(parmElem);
+                        }
+
+                        var extElem = xmlDoc.createElement("Extensions");
+                        var extTpx = xmlDoc.createElement("ns3:TPX");
+                        for(var parm in tpExtdata){
+
+                            var parmElem = xmlDoc.createElement("ns3:"+parm);
+                            parmElem.textContent = tpExtdata[parm];
+                            extTpx.appendChild(parmElem);
+
+                        }
+
+                        extElem.appendChild(extTpx);
+                        trackPoint.appendChild(extElem);
+
+                        track.appendChild(trackPoint);
+
+                    }
+
+
+
+                    var lap = xmlDoc.createElement("Lap");
+                    lap.setAttribute("StartTime", startDate.format("YYYY-MM-DDTHH:mm:ss.SSS") + "Z");
+
+                    lap.appendChild(track);
+
+                    console.log(avgData);
+
+                    //Calculate Averages
+                    lapHeartData["AverageHeartRateBpm"] = Math.round(avgData["TotalHeartRate"]/avgData["CountHeartRate"]);
+                    LapExtensions["AvgWatts"] = Math.round(avgData["TotalWatts"]/avgData["CountWatts"]);
+                    LapExtensions["AvgSpeed"] = avgData["TotalSpeed"]/avgData["CountSpeed"];
+                    lapData["Cadence"] = Math.round(avgData["TotalCadence"]/avgData["CountCadence"]);
+
+                    lapData["Calories"] = Math.round(lapData["Calories"]);
+
+
+                    //Append Lap Aggregate Data
+                    for (var key in lapData) {
+                        var lapAgg = xmlDoc.createElement(key);
+                        lapAgg.textContent = lapData[key];
+                        lap.appendChild(lapAgg);
+                    }
+
+                    //Append Lap Heart Aggregate Data
+                    for (var key in lapHeartData) {
+
+                        var lapAgg = xmlDoc.createElement(key);
+                        var lapVal = xmlDoc.createElement("Value");
+                        lapVal.textContent = lapHeartData[key];
+                        lapAgg.appendChild(lapVal);
+                        lap.appendChild(lapAgg);
+
+                    }
+
+                    //Create Lap Extensions
+
+                    var lapExt = xmlDoc.createElement("Extensions");
+                    var lapLX = xmlDoc.createElement("ns3:LX");
+                    for (var key in LapExtensions) {
+
+                        var lapVal = xmlDoc.createElement("ns3:"+key);
+                        lapVal.textContent = LapExtensions[key];
+                        lapLX.appendChild(lapVal);
+
+                    }
+                    lapExt.appendChild(lapLX);
+                    lap.appendChild(lapExt);
+
+
+
+
+
+                    xactivity.appendChild(lap)
+
+
+                    //Create Creator
+                    var creator = domparser.parseFromString(
+                        "<Creator>" +
+                        "<Name>Lemonds GForce UT</Name>" +
+                        "<UnitId>1</UnitId>" +
+                        "<ProductID>1</ProductID>" +
+                        "<Version>" +
+                        "<VersionMajor>1</VersionMajor>" +
+                        "<VersionMinor>0</VersionMinor>" +
+                        "<BuildMajor>0</BuildMajor>" +
+                        "<BuildMinor>0</BuildMinor>" +
+                        "</Version>" +
+                        "</Creator>"
+                        ,"application/xml");
+                    var creatorElem = creator.childNodes[0];
+                    creatorElem.setAttribute("xsi:type","Device_t");
+                    xactivity.appendChild(creatorElem);
+
+
+                    xactivities.appendChild(xactivity);
+                    tcx.appendChild(xactivities);
+
+
+                    //Create Author
+                    var author = domparser.parseFromString(
+                        "<Author>" +
+                        "<Name>Connect Api</Name>" +
+                        "<Build>" +
+                        "<Version>" +
+                        "<VersionMajor>0</VersionMajor>" +
+                        "<VersionMinor>0</VersionMinor>" +
+                        "<BuildMajor>0</BuildMajor>" +
+                        "<BuildMinor>0</BuildMinor>" +
+                        "</Version>" +
+                        "</Build>" +
+                        "<LangID>en</LangID>" +
+                        "<PartNumber>006-D2449-00</PartNumber>" +
+                        "</Author>"
+                        ,"application/xml");
+                    var authorElem = author.childNodes[0];
+                    authorElem.setAttribute("xsi:type","Application_t");
+                    tcx.appendChild(authorElem);
+
+
+                    xmlDoc.appendChild(tcx);
+
+                    var serializer = new XMLSerializer();
+                    var xmlString = serializer.serializeToString(xmlDoc);
+
+                    var newfile = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n'+xmlString], {type: "text/xml"});
+
+                        var a = document.createElement("a"),
+                            url = URL.createObjectURL(newfile);
+                        a.href = url;
+                        a.download = "Lemond" + moment().format("MMDDYYYYHHmmss") + ".tcx";
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(function() {
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                        }, 0);
+
+
+                }
+            });
+
+
+    }
+
+
+</script>
